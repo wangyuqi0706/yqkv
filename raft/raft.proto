@@ -1,0 +1,103 @@
+syntax = "proto3";
+package raftpb;
+import "github.com/gogo/protobuf@v1.3.2/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_enum_prefix_all) = false;
+option (gogoproto.goproto_unkeyed_all) = false;
+option (gogoproto.goproto_unrecognized_all) = false;
+option (gogoproto.goproto_sizecache_all) = false;
+
+option go_package = "/raftpb";
+
+service RaftRPC {
+  rpc AppendEntries(AppendEntriesArgs) returns (AppendEntriesReply);
+  rpc RequestVote(RequestVoteArgs) returns (RequestVoteReply);
+  rpc InstallSnapshot(InstallSnapshotArgs) returns (InstallSnapshotReply);
+}
+
+message Args {
+  uint64 Term = 1;
+  uint64 Leader = 2;
+}
+
+message Entry {
+  uint64 Term = 1;
+  uint64 Index = 2;
+  bytes Data = 3;
+}
+
+message AppendEntriesArgs {
+  Args args = 1;
+  repeated Entry Entries = 2;
+  uint64 CommitTerm = 3;
+  uint64 LeaderCommit = 4;
+  uint64 PrevLogIndex = 6;
+  uint64 PrevLogTerm = 7;
+}
+
+message AppendEntriesReply {
+  uint64 Term = 1;
+  AppendEntriesStatus Status = 2;
+  uint64 XIndex = 3;
+  uint64 XLen = 4;
+  uint64 XTerm = 5;
+}
+
+enum AppendEntriesStatus {
+  Success = 0;
+  OldTerm = 1;
+  NotContain = 2;
+  OldSnapshot = 3;
+}
+
+message InstallSnapshotArgs {
+  Args Args = 1;
+  Snapshot Snapshot = 2;
+}
+
+message InstallSnapshotReply {
+  uint64 Term = 1;
+}
+
+message RequestVoteArgs {
+  Args args = 1;
+  uint64 CandidateID = 2;
+  uint64 LastLogIndex = 3;
+  uint64 LastLogTerm = 4;
+}
+
+message RequestVoteReply {
+  uint64 Term = 1;
+  bool VoteGranted = 2;
+}
+
+message Snapshot {
+  SnapshotMetaData Metadata = 1;
+  bytes Data = 2;
+}
+
+message SnapshotMetaData {
+  uint64 Index = 1;
+  uint64 Term = 2;
+}
+
+message HardState {
+  uint64 Term = 1;
+  uint64 VotedFor = 2;
+  uint64 Commit = 3;
+}
+
+message Log {
+  repeated Entry Entries = 1;
+  uint64 IncludedIndex = 2;
+  uint64 IncludedTerm = 3;
+}
+
+message RaftState {
+  HardState HardState = 1;
+  Log Log = 2;
+}
