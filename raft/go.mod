@@ -1,4 +1,4 @@
-module raft
+module github.com/wangyuqi0706/yqkv/raft
 
 go 1.17
 

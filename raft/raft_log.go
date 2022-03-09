@@ -1,8 +1,8 @@
 package raft
 
 import (
+	pb "github.com/wangyuqi0706/yqkv/raft/raftpb"
 	"log"
-	pb "raft/raftpb"
 	"sort"
 )
 

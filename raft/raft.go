@@ -30,7 +30,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	pb "raft/raftpb"
+	pb "github.com/wangyuqi0706/yqkv/raft/raftpb"
 )
 
 // ApplyMsg
@@ -695,6 +695,7 @@ func (rf *Raft) AppendEntries(ctx context.Context, args *pb.AppendEntriesArgs) (
 	}
 
 	reply.Status = pb.Success
+	return reply, err
 }
 
 func (rf *Raft) RequestVote(ctx context.Context, args *pb.RequestVoteArgs) (reply *pb.RequestVoteReply, err error) {

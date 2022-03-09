@@ -1,0 +1,54 @@
+syntax = "proto3";
+package shardctlpb;
+import "github.com/gogo/protobuf@v1.3.2/gogoproto/gogo.proto";
+import "session.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_enum_prefix_all) = false;
+option (gogoproto.goproto_unkeyed_all) = false;
+option (gogoproto.goproto_unrecognized_all) = false;
+option (gogoproto.goproto_sizecache_all) = false;
+
+option go_package = "github.com/wangyuqi0706/yqkv/shardctl/shardctlpb";
+
+message Args {
+  OpType Type = 1;
+  sessionpb.SessionHeader SessionHeader = 6;
+  repeated Group NewGroups = 2;
+  repeated int64 LeaveGIDs = 3;
+  int64 MoveGID = 4;
+  int64 MoveShard = 7;
+  int64 QueryNum = 5;
+}
+
+message Reply {
+  bool WrongLeader = 1;
+  string Status = 2;
+  Config Config = 3;
+}
+
+message Group {
+  int64 ID = 1;
+  repeated string servers = 2;
+}
+
+enum OpType {
+  EMPTY = 0;
+  LEAVE = 1;
+  MOVE = 2;
+  QUERY = 3;
+  JOIN = 4;
+}
+
+message Config {
+  int64 Num = 1;
+  repeated int64 Shards = 2;
+  repeated Group Groups = 3;
+}
+
+service shardctl {
+  rpc Execute (Args) returns(Reply);
+}

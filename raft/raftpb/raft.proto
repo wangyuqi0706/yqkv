@@ -11,7 +11,7 @@ option (gogoproto.goproto_unkeyed_all) = false;
 option (gogoproto.goproto_unrecognized_all) = false;
 option (gogoproto.goproto_sizecache_all) = false;
 
-option go_package = "/raftpb";
+option go_package = "github.com/wangyuqi0706/yqkv/raft/raftpb";
 
 service RaftRPC {
   rpc AppendEntries(AppendEntriesArgs) returns (AppendEntriesReply);

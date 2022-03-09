@@ -1,0 +1,19 @@
+syntax = "proto3";
+package sessionpb;
+import "github.com/gogo/protobuf@v1.3.2/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_enum_prefix_all) = false;
+option (gogoproto.goproto_unkeyed_all) = false;
+option (gogoproto.goproto_unrecognized_all) = false;
+option (gogoproto.goproto_sizecache_all) = false;
+
+option go_package = "github.com/wangyuqi0706/yqkv/session/sessionpb";
+
+message SessionHeader {
+  int64 ID = 1;
+  uint64 Seq = 2;
+}
