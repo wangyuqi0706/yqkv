@@ -1,9 +1,9 @@
 package shardctl
 
 import (
+	"context"
 	"fmt"
 	"github.com/wangyuqi0706/yqkv/raft"
-	"github.com/wangyuqi0706/yqkv/raft/raftpb"
 	"github.com/wangyuqi0706/yqkv/session"
 	pb "github.com/wangyuqi0706/yqkv/shardctl/shardctlpb"
 	"go.etcd.io/etcd/pkg/v3/wait"
@@ -42,33 +42,6 @@ const (
 	OK             string = "OK"
 )
 
-func (sc *ShardCtl) Execute(args *pb.Args, reply *pb.Reply) {
-	if sc.SessionMap.IsDuplicate(args.SessionHeader) {
-		if resp, err := sc.SessionMap.GetResponse(args.SessionHeader); err != nil {
-			reply.Status = err.Error()
-		} else {
-			*reply = *resp.(*pb.Reply)
-		}
-		sc.logger.Printf("DUPLICATE %v request=%v reply=%v", args.Type, args.SessionHeader, reply)
-		return
-	}
-	data, _ := args.Marshal()
-	index, _, isLead := sc.rf.Start(data)
-	if !isLead {
-		reply.WrongLeader = true
-		reply.Status = ErrWrongLeader
-		return
-	}
-	<-sc.waitApply.Wait(index)
-	resp, err := sc.SessionMap.GetResponse(args.SessionHeader)
-	if err != nil {
-		reply.Status = err.Error()
-		return
-	}
-	*reply = *resp.(*pb.Reply)
-	//sc.logger.Printf("RETURN %v index=%v request=%v reply=%v", args.Type, index, args.Request, reply)
-}
-
 func (sc *ShardCtl) run() {
 	for {
 		select {
@@ -93,7 +66,7 @@ func (sc *ShardCtl) run() {
 				case pb.QUERY:
 					reply, err = sc.applyQuery(args.QueryNum)
 				case pb.EMPTY:
-					reply = &pb.Reply{Status: OK, WrongLeader: false}
+					reply = &pb.Reply{Status: pb.OK, WrongLeader: false}
 					err = nil
 				}
 				if err != nil {
@@ -110,6 +83,36 @@ func (sc *ShardCtl) run() {
 			return
 		}
 	}
+}
+
+func (sc *ShardCtl) Execute(ctx context.Context, args *pb.Args) (reply *pb.Reply, err error) {
+	if sc.SessionMap.IsDuplicate(args.SessionHeader) {
+		if resp, err := sc.SessionMap.GetResponse(args.SessionHeader); err != nil {
+			reply.Status = pb.ERR_BAD_SESSION
+			reply.Message = err.Error()
+		} else {
+			*reply = *resp.(*pb.Reply)
+		}
+		sc.logger.Printf("DUPLICATE %v request=%v reply=%v", args.Type, args.SessionHeader, reply)
+		return
+	}
+	data, _ := args.Marshal()
+	index, _, isLead := sc.rf.Start(data)
+	if !isLead {
+		reply.WrongLeader = true
+		reply.Status = pb.ERR_WRONG_LEADER
+		return
+	}
+	<-sc.waitApply.Wait(index)
+	resp, err := sc.SessionMap.GetResponse(args.SessionHeader)
+	if err != nil {
+		reply.Status = pb.ERR_BAD_SESSION
+		reply.Message = err.Error()
+		return
+	}
+	reply = resp.(*pb.Reply)
+	//sc.logger.Printf("RETURN %v index=%v request=%v reply=%v", args.Type, index, args.Request, reply)
+	return reply, nil
 }
 
 // Kill
@@ -132,7 +135,7 @@ func (sc *ShardCtl) applyJoin(groups []*pb.Group) (*pb.Reply, error) {
 	// map shard -> gid
 	cfg.Reshard()
 	sc.configs = append(sc.configs, cfg)
-	return &pb.Reply{Status: OK}, nil
+	return &pb.Reply{Status: pb.OK}, nil
 }
 
 func (sc *ShardCtl) applyLeave(gids []int64) (*pb.Reply, error) {
@@ -143,14 +146,14 @@ func (sc *ShardCtl) applyLeave(gids []int64) (*pb.Reply, error) {
 	cfg.Leave(gids)
 	cfg.Reshard()
 	sc.configs = append(sc.configs, cfg)
-	return &pb.Reply{WrongLeader: false, Status: OK}, nil
+	return &pb.Reply{WrongLeader: false, Status: pb.OK}, nil
 }
 
 func (sc *ShardCtl) applyMove(gid int64, shard int64) (*pb.Reply, error) {
 	cfg := sc.newConfig()
 	cfg.Shards[shard] = gid
 	sc.configs = append(sc.configs, cfg)
-	return &pb.Reply{WrongLeader: false, Status: OK}, nil
+	return &pb.Reply{WrongLeader: false, Status: pb.OK}, nil
 }
 
 func (sc *ShardCtl) applyQuery(queryNum int64) (*pb.Reply, error) {
@@ -160,7 +163,7 @@ func (sc *ShardCtl) applyQuery(queryNum int64) (*pb.Reply, error) {
 	} else {
 		resp = sc.configs[queryNum]
 	}
-	return &pb.Reply{Status: OK, Config: resp.(*pb.Config)}, nil
+	return &pb.Reply{Status: pb.OK, Config: resp.(*pb.Config)}, nil
 }
 
 func (sc *ShardCtl) newConfig() *Config {
@@ -180,7 +183,7 @@ func (sc *ShardCtl) newConfig() *Config {
 func (sc *ShardCtl) checkEntryInCurrentTermAction() {
 	if !sc.rf.HasCurrentTermLog() {
 		args := &pb.Args{Type: pb.EMPTY, SessionHeader: sc.clientSession.NextHeader()}
-		sc.Execute(args, &pb.Reply{})
+		_, _ = sc.Execute(context.Background(), args)
 		return
 	}
 }
@@ -205,7 +208,7 @@ func (sc *ShardCtl) Monitor(action func(), timeout time.Duration) {
 // form the fault-tolerant shardctl service.
 // "me" is the index of the current server in servers[].
 //
-func StartServer(servers []raftpb.RaftRPCClient, me uint64, persister *raft.Persister) *ShardCtl {
+func StartServer(servers []string, me uint64, persister *raft.Persister) *ShardCtl {
 	sc := new(ShardCtl)
 	sc.me = me
 
@@ -213,7 +216,7 @@ func StartServer(servers []raftpb.RaftRPCClient, me uint64, persister *raft.Pers
 	sc.configs[0].Groups = map[int64]*pb.Group{}
 
 	sc.applyCh = make(chan raft.ApplyMsg)
-	sc.rf = raft.Make(servers, me, persister, sc.applyCh)
+	sc.rf, _ = raft.Make(servers, me, persister, sc.applyCh)
 
 	// Your code here.
 	sc.SessionMap = session.NewSessionMap()

@@ -14,9 +14,24 @@ type Config struct {
 	Groups map[int64]*pb.Group
 }
 
+func NewConfig(pbConfig *pb.Config) *Config {
+	cfg := &Config{
+		Num:    pbConfig.Num,
+		Shards: [1024]int64{},
+		Groups: map[int64]*pb.Group{},
+	}
+	for i := 0; i < NShards && i < len(pbConfig.Shards); i++ {
+		cfg.Shards[i] = pbConfig.Shards[i]
+	}
+	for _, group := range pbConfig.Groups {
+		cfg.Groups[group.ID] = group
+	}
+	return cfg
+}
+
 func (cfg *Config) Gids() []int64 {
 	gids := make([]int64, 0, len(cfg.Groups))
-	for id, _ := range cfg.Groups {
+	for id := range cfg.Groups {
 		gids = append(gids, id)
 	}
 	return gids

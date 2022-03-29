@@ -12,18 +12,20 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 	return
 }
 
-func MinInt(a, b uint64) uint64 {
-	if a < b {
-		return a
-	} else {
-		return b
-	}
+type Number interface {
+	int | int32 | int64 | float32 | float64 | byte | int16 | int8
 }
 
-func MaxInt(a, b uint64) uint64 {
-	if a > b {
+func min[T Number](a, b T) T {
+	if a < b {
 		return a
-	} else {
+	}
+	return b
+}
+
+func max[T Number](a, b T) T {
+	if a < b {
 		return b
 	}
+	return a
 }

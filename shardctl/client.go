@@ -6,7 +6,6 @@ package shardctl
 
 import (
 	"context"
-	"github.com/wangyuqi0706/yqkv/raft"
 	"github.com/wangyuqi0706/yqkv/session"
 	pb "github.com/wangyuqi0706/yqkv/shardctl/shardctlpb"
 	"log"
@@ -24,7 +23,7 @@ type ClientConfig struct {
 	Retries int
 }
 
-const RequestTimeout = 5 * raft.HeartBeatInterval
+const RequestTimeout = 5 * 200 * time.Millisecond
 
 func defaultConfig() ClientConfig {
 	return ClientConfig{RequestTimeout, []time.Duration{50 * time.Millisecond}, -1}
@@ -124,11 +123,11 @@ func (ck *Clerk) call(args *pb.Args, reply *pb.Reply) {
 			if ok {
 				switch r.Status {
 				// return
-				case OK:
+				case pb.OK:
 					*reply = *r
 					//ck.logger.Printf("REQUEST SUCCESS args=%v reply=%v", args, reply)
 					return
-				case ErrWrongLeader:
+				case pb.ERR_WRONG_LEADER:
 				}
 			}
 			// Else, Retry

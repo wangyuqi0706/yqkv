@@ -1,0 +1,98 @@
+syntax = "proto3";
+package yqkvpb;
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "session.proto";
+import "shardctl.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_enum_prefix_all) = false;
+option (gogoproto.goproto_unkeyed_all) = false;
+option (gogoproto.goproto_unrecognized_all) = false;
+option (gogoproto.goproto_sizecache_all) = false;
+
+option go_package = "github.com/wangyuqi0706/yqkv/yqkvpb";
+
+message Args {
+  OpType type = 1;
+  sessionpb.SessionHeader SessionHeader = 2;
+  string key = 3;
+  string value = 4;
+  shardctlpb.Config nextConfig = 5;
+  repeated int64 shardIDs = 6;
+  int64 configNum = 7;
+  PullShardsResponse pulledShards = 8;
+}
+
+message Reply {
+  ReplyStatus status = 1;
+  string value = 2;
+  string message = 3;
+  bytes data = 4;
+}
+
+message Shard {
+  int64 ID = 1;
+  map<string, string> KV = 2;
+  ShardStatus status = 3;
+}
+
+enum ShardStatus {
+  SERVING = 0;
+  PULLING = 1;
+  BE_PULLING = 2;
+  GC = 3;
+}
+
+
+message PullShardsResponse {
+  repeated Shard shards = 1;
+  map<int64, sessionpb.ServerSession> serverSessions = 2;
+  int64 configNum = 3;
+}
+
+enum OpType {
+  EMPTY = 0;
+  GET = 1;
+  PUT = 2;
+  APPEND = 3;
+  PULL_SHARDS = 4;
+  INSERT_SHARDS = 5;
+  RECONFIGURE = 6;
+  DELETE_SHARDS = 7;
+}
+
+enum ReplyStatus {
+  OK = 0;
+  ERR_WRONG_LEADER = 1;
+  ERR_NOT_READY = 2;
+  ERR_WRONG_GROUP = 3;
+  ERR_OUT_DATED_CONFIG = 4;
+  ERR_NO_KEY = 5;
+  ERR_BAD_SESSION = 6;
+}
+
+//type ServerSession struct {
+//    ID           int64
+//    ProcessedSeq uint64
+//    ResponseMap  map[uint64]Response
+//    LastResponse Response
+//}
+
+message ServerSession {
+  int64 ID = 1;
+  uint64 ProcessedSeq = 2;
+  map<uint64,Reply> ResponseMap = 3;
+  Reply LastReply = 4;
+}
+
+
+
+
+service ShardKV {
+  rpc Execute(Args) returns(Reply);
+  rpc PullShards(Args) returns(Reply);
+  rpc DeleteShards(Args) returns(Reply);
+}

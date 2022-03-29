@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc"
 	"log"
 	"math/rand"
 	"os"
@@ -146,7 +147,7 @@ func (rf *Raft) GetLeaderId() uint64 {
 	return rf.leaderId
 }
 
-func (rf *Raft) LogSize() int {
+func (rf *Raft) LogSize() int64 {
 	return rf.persister.RaftStateSize()
 }
 
@@ -231,8 +232,8 @@ func (rf *Raft) Snapshot(index uint64, snapshot []byte) {
 	// Your code here (2D).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	rf.HardState.Commit = MaxInt(rf.HardState.Commit, index)
-	rf.lastApplied = MaxInt(rf.lastApplied, index)
+	rf.HardState.Commit = max(rf.HardState.Commit, index)
+	rf.lastApplied = max(rf.lastApplied, index)
 	// Trim log if snapshot is older than current
 	if index <= rf.log.LastEntry().Index {
 		rf.log.CompactForSnapshot(index, rf.log.EntryAt(index).Term)
@@ -445,15 +446,15 @@ func (rf *Raft) callAppendEntries(ctx context.Context, server int, isHeartBeat b
 // the leader.
 //
 func (rf *Raft) Start(command []byte) (index uint64, term uint64, isLeader bool) {
-	index = -1
-	term = -1
+	index = 0
+	term = 0
 	// Your code here (2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
 	isLeader = rf.state == ServerStateLeader
 	if !isLeader {
-		return -1, -1, false
+		return 0, 0, false
 	}
 
 	index = rf.nextIndex[rf.me]
@@ -685,7 +686,7 @@ func (rf *Raft) AppendEntries(ctx context.Context, args *pb.AppendEntriesArgs) (
 	// If a heart-beating package with args.LeaderCommit=n arrives before an uncommitted entry at log[n] is deleted, log[n]
 	// could be committed by accident.
 	if args.LeaderCommit > rf.getCommit() {
-		commitIndex := MinInt(args.LeaderCommit, rf.log.LastEntry().Index)
+		commitIndex := min(args.LeaderCommit, rf.log.LastEntry().Index)
 		if rf.log.EntryAt(commitIndex).Term != args.CommitTerm {
 			return
 		}
@@ -908,7 +909,7 @@ func (rf *Raft) convertToFollower(term uint64) {
 	rf.HardState.Term = term
 	rf.state = ServerStateFollower
 	rf.votes = 0
-	rf.leaderId = -1
+	rf.leaderId = 0
 	rf.HardState.VotedFor = None
 	rf.persist()
 	go rf.ticker(term)
@@ -928,7 +929,7 @@ func (rf *Raft) launchElection(newTerm uint64) {
 	rf.cancelElection = cancel
 	// convert to candidate
 	rf.state = ServerStateCandidate
-	rf.leaderId = -1
+	rf.leaderId = 0
 	// increment Term
 	rf.HardState.Term = newTerm
 	//rf.logger.Printf("LAUNCH ELECTION: server=%v newTerm=%v", rf.me, rf.currentTerm)
@@ -1007,10 +1008,14 @@ func (rf *Raft) getCommit() uint64 {
 // Make() must return quickly, so it should start goroutines
 // for any long-running work.
 //
-func Make(peers []pb.RaftRPCClient, me uint64,
-	persister *Persister, applyCh chan ApplyMsg) *Raft {
+func Make(peersAddr []string, me uint64,
+	persister *Persister, applyCh chan ApplyMsg) (*Raft, error) {
 	rf := &Raft{}
 	rf.logger = log.New(os.Stdout, fmt.Sprintf("[RAFT %v] ", me), log.LstdFlags|log.Lmsgprefix)
+	peers, err := makePeers(peersAddr)
+	if err != nil {
+		return nil, fmt.Errorf("make raft error:[%w]", err)
+	}
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
@@ -1026,7 +1031,7 @@ func Make(peers []pb.RaftRPCClient, me uint64,
 	rf.HardState.Commit = 0
 	rf.lastApplied = 0
 
-	rf.leaderId = -1
+	rf.leaderId = 0
 
 	rf.applyChan = applyCh
 	rf.done = make(chan struct{})
@@ -1037,5 +1042,18 @@ func Make(peers []pb.RaftRPCClient, me uint64,
 
 	go rf.applyCommittedLogs()
 
-	return rf
+	return rf, nil
+}
+
+func makePeers(addrs []string) ([]pb.RaftRPCClient, error) {
+	clients := make([]pb.RaftRPCClient, 0, len(addrs))
+	for _, addr := range addrs {
+		conn, err := grpc.Dial(addr)
+		if err != nil {
+			return nil, err
+		}
+		client := pb.NewRaftRPCClient(conn)
+		clients = append(clients, client)
+	}
+	return clients, nil
 }

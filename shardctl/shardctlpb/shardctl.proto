@@ -1,6 +1,6 @@
 syntax = "proto3";
 package shardctlpb;
-import "github.com/gogo/protobuf@v1.3.2/gogoproto/gogo.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "session.proto";
 
 option (gogoproto.marshaler_all) = true;
@@ -25,9 +25,10 @@ message Args {
 }
 
 message Reply {
-  bool WrongLeader = 1;
-  string Status = 2;
-  Config Config = 3;
+  bool wrongLeader = 1;
+  ReplyStatus status = 2;
+  string message = 3;
+  Config config = 4;
 }
 
 message Group {
@@ -41,6 +42,12 @@ enum OpType {
   MOVE = 2;
   QUERY = 3;
   JOIN = 4;
+}
+
+enum ReplyStatus {
+  OK = 0;
+  ERR_WRONG_LEADER = 1;
+  ERR_BAD_SESSION = 2;
 }
 
 message Config {
